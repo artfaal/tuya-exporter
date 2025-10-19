@@ -11,7 +11,6 @@ import time
 import logging
 import json
 import os
-import re
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
 
@@ -58,37 +57,6 @@ file_handler.setFormatter(file_formatter)
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
-# === TRANSLITERATION MAP ===
-TRANSLIT_MAP = {
-    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
-    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
-    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
-    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
-    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
-    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
-    'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
-    'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
-    'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch',
-    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
-}
-
-def sanitize_label(text):
-    """
-    Sanitize device name for Prometheus label
-    - Transliterate cyrillic to latin
-    - Replace spaces and special chars with underscore
-    - Keep only alphanumeric and underscore
-    """
-    # Transliterate cyrillic
-    result = ''.join(TRANSLIT_MAP.get(c, c) for c in text)
-    # Replace spaces and non-alphanumeric with underscore
-    result = re.sub(r'[^a-zA-Z0-9_]+', '_', result)
-    # Remove leading/trailing underscores
-    result = result.strip('_')
-    # Convert to lowercase for consistency
-    result = result.lower()
-    return result if result else 'unknown'
-
 # === SETUP SOCKS5 PROXY ===
 if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
     import socks
@@ -131,49 +99,22 @@ battery_gauge = Gauge(
     registry=registry
 )
 
-def get_user_info():
-    """Получаем информацию о пользователе для получения UID"""
-    try:
-        # Получаем информацию о токене
-        response = openapi.get("/v1.0/token", {"grant_type": 1})
-        logger.debug(f"Token info: {json.dumps(response, indent=2)}")
-
-        if response.get("success") and "result" in response:
-            uid = response["result"].get("uid")
-            logger.info(f"User UID: {uid}")
-            return uid
-        return None
-    except Exception as e:
-        logger.error(f"Error getting user info: {e}")
-        return None
-
 def get_all_devices():
-    """Получаем список всех устройств через пользовательский API"""
+    """Загружаем устройства из devices.json (TinyTuya wizard output)"""
     try:
-        # Сначала получаем UID пользователя
-        uid = get_user_info()
-
-        if not uid:
-            logger.error("Could not get user UID")
-            # Пробуем альтернативный метод - получение устройств напрямую
-            logger.info("Trying alternative method to get devices...")
-
-        # Используем endpoint для получения устройств пользователя
-        response = openapi.get(f"/v1.0/users/{uid}/devices") if uid else openapi.get("/v2.0/cloud/thing/device")
-
-        logger.debug(f"Devices response: {json.dumps(response, indent=2, ensure_ascii=False)}")
-
-        if not response.get("success"):
-            logger.error(f"Failed to get devices: {response}")
+        if not os.path.exists("devices.json"):
+            logger.error("❌ devices.json not found!")
+            logger.info("💡 Run 'python wizard.py' first to discover devices")
             return []
 
-        devices = response.get("result", {})
+        with open("devices.json", "r", encoding="utf-8") as f:
+            devices = json.load(f)
 
-        # Обрабатываем разные форматы ответа
-        if isinstance(devices, dict):
-            devices = devices.get("devices", []) or devices.get("list", [])
-        elif not isinstance(devices, list):
-            devices = []
+        if not isinstance(devices, list):
+            logger.error("❌ Invalid devices.json format")
+            return []
+
+        logger.info(f"📄 Loaded {len(devices)} devices from devices.json")
 
         # Фильтруем только датчики почвы (категория zwjcy)
         soil_sensors = []
@@ -189,19 +130,18 @@ def get_all_devices():
                     "id": dev["id"],
                     "name": name,
                     "category": category,
-                    "online": dev.get("online", False),
+                    "online": True,  # Считаем все устройства из devices.json активными
                     "product_name": product_name
                 })
 
         logger.info(f"Found {len(soil_sensors)} soil sensor(s):")
         for sensor in soil_sensors:
-            status = "🟢 online" if sensor["online"] else "🔴 offline"
-            logger.info(f"  - {sensor['name']} ({sensor['id']}) {status}")
+            logger.info(f"  - {sensor['name']} ({sensor['id']})")
 
         return soil_sensors
 
     except Exception as e:
-        logger.error(f"Error getting devices: {e}", exc_info=True)
+        logger.error(f"Error loading devices.json: {e}", exc_info=True)
         return []
 
 def get_device_data(device_id):
@@ -240,27 +180,24 @@ def push_metrics(device_id, device_name, data):
     try:
         metrics_pushed = False
 
-        # Sanitize device name for Prometheus label
-        safe_name = sanitize_label(device_name)
-
         # Влажность почвы
         if "humidity" in data:
             humidity = float(data["humidity"])
-            humidity_gauge.labels(device_id=device_id, device_name=safe_name).set(humidity)
+            humidity_gauge.labels(device_id=device_id, device_name=device_name).set(humidity)
             logger.info(f"  💧 {device_name}: Humidity {humidity}%")
             metrics_pushed = True
 
         # Температура
         if "temp_current" in data:
             temp = float(data["temp_current"]) / 10
-            temperature_gauge.labels(device_id=device_id, device_name=safe_name).set(temp)
+            temperature_gauge.labels(device_id=device_id, device_name=device_name).set(temp)
             logger.info(f"  🌡️  {device_name}: Temperature {temp}°C")
             metrics_pushed = True
 
         # Батарея
         if "battery_percentage" in data:
             battery = float(data["battery_percentage"])
-            battery_gauge.labels(device_id=device_id, device_name=safe_name).set(battery)
+            battery_gauge.labels(device_id=device_id, device_name=device_name).set(battery)
             logger.info(f"  🔋 {device_name}: Battery {battery}%")
             metrics_pushed = True
 
@@ -279,19 +216,9 @@ def main():
     devices = get_all_devices()
 
     if not devices:
-        logger.error("❌ No soil sensors found!")
-        logger.info("\n💡 Tip: Check if devices are visible in devices.json from tinytuya wizard")
-        logger.info("You can manually add device IDs to the script if needed.\n")
-
-        # Fallback: используем известный датчик
-        logger.info("Using known device as fallback...")
-        devices = [{
-            "id": "bf95b7947d0d48b6d11yrz",
-            "name": "Smart Soil Tester",
-            "category": "zwjcy",
-            "online": True,
-            "product_name": "Smart Soil Tester"
-        }]
+        logger.error("❌ No soil sensors found in devices.json!")
+        logger.info("\n💡 Run 'python wizard.py' to discover your devices\n")
+        return
 
     logger.info(f"\n📊 Starting monitoring of {len(devices)} device(s)...\n")
 
