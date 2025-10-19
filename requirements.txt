@@ -6,6 +6,7 @@ pycryptodome==3.23.0
 PySocks==1.7.1
 python-dotenv==1.1.1
 requests==2.32.5
+tinytuya>=1.14.0
 tuya-connector-python==0.1.2
 urllib3==2.5.0
 websocket-client==1.9.0
