@@ -11,6 +11,7 @@ import time
 import logging
 import json
 import os
+import re
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
 
@@ -56,6 +57,37 @@ file_handler.setFormatter(file_formatter)
 
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
+
+# === TRANSLITERATION MAP ===
+TRANSLIT_MAP = {
+    'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+    'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+    'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+    'ф': 'f', 'х': 'h', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sch',
+    'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+    'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'Yo',
+    'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+    'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+    'Ф': 'F', 'Х': 'H', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Sch',
+    'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya'
+}
+
+def sanitize_label(text):
+    """
+    Sanitize device name for Prometheus label
+    - Transliterate cyrillic to latin
+    - Replace spaces and special chars with underscore
+    - Keep only alphanumeric and underscore
+    """
+    # Transliterate cyrillic
+    result = ''.join(TRANSLIT_MAP.get(c, c) for c in text)
+    # Replace spaces and non-alphanumeric with underscore
+    result = re.sub(r'[^a-zA-Z0-9_]+', '_', result)
+    # Remove leading/trailing underscores
+    result = result.strip('_')
+    # Convert to lowercase for consistency
+    result = result.lower()
+    return result if result else 'unknown'
 
 # === SETUP SOCKS5 PROXY ===
 if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
@@ -208,24 +240,27 @@ def push_metrics(device_id, device_name, data):
     try:
         metrics_pushed = False
 
+        # Sanitize device name for Prometheus label
+        safe_name = sanitize_label(device_name)
+
         # Влажность почвы
         if "humidity" in data:
             humidity = float(data["humidity"])
-            humidity_gauge.labels(device_id=device_id, device_name=device_name).set(humidity)
+            humidity_gauge.labels(device_id=device_id, device_name=safe_name).set(humidity)
             logger.info(f"  💧 {device_name}: Humidity {humidity}%")
             metrics_pushed = True
 
         # Температура
         if "temp_current" in data:
             temp = float(data["temp_current"]) / 10
-            temperature_gauge.labels(device_id=device_id, device_name=device_name).set(temp)
+            temperature_gauge.labels(device_id=device_id, device_name=safe_name).set(temp)
             logger.info(f"  🌡️  {device_name}: Temperature {temp}°C")
             metrics_pushed = True
 
         # Батарея
         if "battery_percentage" in data:
             battery = float(data["battery_percentage"])
-            battery_gauge.labels(device_id=device_id, device_name=device_name).set(battery)
+            battery_gauge.labels(device_id=device_id, device_name=safe_name).set(battery)
             logger.info(f"  🔋 {device_name}: Battery {battery}%")
             metrics_pushed = True
 
