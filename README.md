@@ -157,17 +157,14 @@ tail -f logs/tuya_exporter.log
 
 ## Автозапуск на macOS
 
-Для автоматического запуска экспортера при загрузке системы:
-
-### 1. Создание LaunchAgent
-
-Создайте файл `~/Library/LaunchAgents/com.tuya.exporter.plist`:
+Для автоматического запуска экспортера при загрузке системы создайте LaunchAgent:
 
 ```bash
-mkdir -p ~/Library/LaunchAgents
+# Создайте файл
+nano ~/Library/LaunchAgents/com.tuya.exporter.plist
 ```
 
-Содержимое файла (замените `/Users/artfaal/PROJECTS/tuya-exporter` на ваш путь):
+Содержимое файла:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -179,12 +176,12 @@ mkdir -p ~/Library/LaunchAgents
 
     <key>ProgramArguments</key>
     <array>
-        <string>/Users/artfaal/PROJECTS/tuya-exporter/venv/bin/python</string>
-        <string>/Users/artfaal/PROJECTS/tuya-exporter/tuya_super_final.py</string>
+        <string>/Users/southnet-mac-server/PROJECTS/tuya-exporter/venv/bin/python</string>
+        <string>/Users/southnet-mac-server/PROJECTS/tuya-exporter/tuya_exporter.py</string>
     </array>
 
     <key>WorkingDirectory</key>
-    <string>/Users/artfaal/PROJECTS/tuya-exporter</string>
+    <string>/Users/southnet-mac-server/PROJECTS/tuya-exporter</string>
 
     <key>RunAtLoad</key>
     <true/>
@@ -193,10 +190,10 @@ mkdir -p ~/Library/LaunchAgents
     <true/>
 
     <key>StandardOutPath</key>
-    <string>/Users/artfaal/PROJECTS/tuya-exporter/logs/stdout.log</string>
+    <string>/Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/stdout.log</string>
 
     <key>StandardErrorPath</key>
-    <string>/Users/artfaal/PROJECTS/tuya-exporter/logs/stderr.log</string>
+    <string>/Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/stderr.log</string>
 
     <key>EnvironmentVariables</key>
     <dict>
@@ -207,80 +204,56 @@ mkdir -p ~/Library/LaunchAgents
 </plist>
 ```
 
-### 2. Загрузка и запуск сервиса
+Загрузка и запуск сервиса:
 
 ```bash
-# Загрузить сервис
+# Загрузить и запустить
 launchctl load ~/Library/LaunchAgents/com.tuya.exporter.plist
-
-# Запустить сервис
-launchctl start com.tuya.exporter
 
 # Проверить статус
 launchctl list | grep tuya
-```
 
-### 3. Управление сервисом
-
-```bash
 # Остановить
-launchctl stop com.tuya.exporter
-
-# Удалить из автозагрузки
 launchctl unload ~/Library/LaunchAgents/com.tuya.exporter.plist
 
-# Перезапустить (после изменений)
-launchctl unload ~/Library/LaunchAgents/com.tuya.exporter.plist
-launchctl load ~/Library/LaunchAgents/com.tuya.exporter.plist
-```
-
-### 4. Просмотр логов сервиса
-
-```bash
-# Логи приложения
-tail -f logs/tuya_exporter.log
-
-# Системные логи LaunchAgent
-tail -f logs/stdout.log
-tail -f logs/stderr.log
+# Просмотр логов
+tail -f /Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/tuya_exporter.log
+tail -f /Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/stderr.log
 ```
 
 ## Обновление имен датчиков
 
 Если вы переименовали датчики в приложении Smart Life:
 
-1. Остановите экспортер (если запущен как сервис):
+1. Остановите экспортер:
    ```bash
-   launchctl stop com.tuya.exporter
+   launchctl unload ~/Library/LaunchAgents/com.tuya.exporter.plist
    ```
 
-2. Запустите визард для обновления информации о датчиках:
+2. Запустите wizard для обновления `devices.json`:
    ```bash
+   cd /Users/southnet-mac-server/PROJECTS/tuya-exporter
    source venv/bin/activate
    python wizard.py
    ```
 
 3. Перезапустите экспортер:
    ```bash
-   launchctl start com.tuya.exporter
-   # или если запускаете вручную:
-   python tuya_exporter.py
+   launchctl load ~/Library/LaunchAgents/com.tuya.exporter.plist
    ```
-
-Имена устройств обновятся автоматически при следующем цикле сбора данных.
 
 ## Структура проекта
 
 ```
 tuya-exporter/
 ├── tuya_exporter.py        # Основной скрипт экспортера
-├── wizard.py               # Скрипт обнаружения датчиков
+├── wizard.py               # Скрипт обнаружения датчиков (TinyTuya)
 ├── requirements.txt        # Зависимости Python
 ├── .env                    # Конфигурация (не в git)
 ├── .env.example            # Пример конфигурации
+├── devices.json.example    # Пример структуры devices.json
 ├── .gitignore              # Исключения для git
 ├── README.md               # Документация
-├── com.tuya.exporter.plist # LaunchAgent для macOS
 └── logs/                   # Директория логов
     ├── tuya_exporter.log   # Основные логи
     ├── stdout.log          # stdout LaunchAgent
