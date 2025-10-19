@@ -4,7 +4,7 @@
 Tuya Device Discovery Wizard using TinyTuya
 Запускает wizard для локального обнаружения устройств и получения их имен
 """
-import tinytuya
+import subprocess
 import sys
 
 def main():
@@ -23,8 +23,12 @@ def main():
     print("=" * 70)
     print()
 
-    # Run TinyTuya wizard
-    tinytuya.wizard()
+    # Run TinyTuya wizard via command line
+    try:
+        subprocess.run([sys.executable, "-m", "tinytuya", "wizard"], check=True)
+    except subprocess.CalledProcessError as e:
+        print(f"\n❌ Wizard failed with error: {e}")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
