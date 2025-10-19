@@ -1,0 +1,22 @@
+[
+    {
+        "name": "Имя датчика из Smart Life",
+        "id": "device_id_from_tuya",
+        "key": "local_key",
+        "mac": "aa:bb:cc:dd:ee:ff:gg:hh",
+        "uuid": "uuid",
+        "sn": "serial_number",
+        "category": "zwjcy",
+        "product_name": "SGS01 ZIGEBEE",
+        "product_id": "product_id",
+        "biz_type": 18,
+        "model": "SGS01Z",
+        "sub": true,
+        "icon": "https://...",
+        "node_id": "node_id",
+        "mapping": {},
+        "parent": "parent_device_id",
+        "ip": "",
+        "version": ""
+    }
+]

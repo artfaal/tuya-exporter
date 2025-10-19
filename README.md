@@ -125,10 +125,12 @@ python tuya_exporter.py
 ```
 
 Скрипт будет:
-1. Автоматически обнаруживать все датчики почвы
-2. Каждые 60 секунд (или другой интервал из `.env`) собирать данные
-3. Отправлять метрики в Pushgateway
+1. Загружать список датчиков из `devices.json`
+2. Каждые 60 секунд (или другой интервал из `.env`) собирать данные через Tuya Cloud API
+3. Отправлять метрики в Pushgateway с меткой `instance="home"`
 4. Логировать все действия в консоль и файл `logs/tuya_exporter.log`
+
+**Важно:** Имена датчиков берутся из `devices.json` и отправляются в Prometheus как есть (поддерживаются русские имена).
 
 ### Просмотр логов
 
@@ -144,13 +146,14 @@ tail -f logs/tuya_exporter.log
 
 Экспортер отправляет следующие метрики:
 
-- `tuya_plant_humidity{device_id="...", device_name="..."}` - Влажность почвы (%)
-- `tuya_plant_temperature{device_id="...", device_name="..."}` - Температура почвы (°C)
-- `tuya_plant_battery{device_id="...", device_name="..."}` - Уровень заряда батареи (%)
+- `tuya_plant_humidity{device_id="...", device_name="...", instance="home"}` - Влажность почвы (%)
+- `tuya_plant_temperature{device_id="...", device_name="...", instance="home"}` - Температура почвы (°C)
+- `tuya_plant_battery{device_id="...", device_name="...", instance="home"}` - Уровень заряда батареи (%)
 
 Каждая метрика помечена labels:
 - `device_id` - ID устройства в Tuya
-- `device_name` - Имя устройства из Smart Life приложения
+- `device_name` - Имя устройства из `devices.json` (поддерживаются русские имена)
+- `instance` - Метка экземпляра (всегда `"home"`)
 
 ## Автозапуск на macOS
 

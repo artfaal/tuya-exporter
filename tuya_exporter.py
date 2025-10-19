@@ -2,8 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 Tuya Multi-Sensor → Prometheus Pushgateway Exporter
-Поддержка нескольких датчиков с именами из Smart Life
-Работа через SOCKS5 прокси
+
+Экспортер данных с датчиков почвы Tuya в Prometheus Pushgateway.
+- Загружает список датчиков из devices.json (TinyTuya wizard)
+- Получает данные через Tuya Cloud API
+- Отправляет метрики в Pushgateway с поддержкой русских имён
+- Опциональная работа через SOCKS5 прокси
 """
 from tuya_connector import TuyaOpenAPI
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
@@ -241,7 +245,7 @@ def main():
                         any_data = True
 
             if any_data:
-                push_to_gateway(PUSHGATEWAY, job='tuya_sensors', registry=registry)
+                push_to_gateway(PUSHGATEWAY, job='tuya_sensors', registry=registry, grouping_key={'instance': 'home'})
                 logger.info(f"✅ All metrics pushed to Pushgateway\n")
             else:
                 logger.warning("⚠️  No data collected in this cycle\n")
