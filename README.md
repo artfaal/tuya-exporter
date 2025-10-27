@@ -12,6 +12,8 @@
 - ✅ Поддержка нескольких датчиков одновременно
 - ✅ Использование имен устройств из Smart Life приложения
 - ✅ Экспорт метрик: влажность почвы, температура, уровень заряда батареи
+- ✅ Настраиваемые пороговые значения влажности для каждого растения
+- ✅ Автообновление конфига без перезапуска приложения
 - ✅ Поддержка SOCKS5 прокси (опционально)
 - ✅ Логирование в файл с ротацией
 - ✅ Автозапуск на macOS через LaunchAgent
@@ -142,13 +144,74 @@ tail -f logs/tuya_exporter.log
 
 Логи автоматически ротируются при достижении 10 МБ, сохраняется 5 последних файлов.
 
+## Настройка пороговых значений влажности
+
+Вы можете настроить оптимальные диапазоны влажности для каждого растения индивидуально.
+
+### Создание конфигурационного файла
+
+Скопируйте пример конфига:
+
+```bash
+cp plant_config.yaml.example plant_config.yaml
+```
+
+Отредактируйте `plant_config.yaml`, указав минимальное и максимальное значение влажности для каждого растения:
+
+```yaml
+# Значения по умолчанию для всех растений
+defaults:
+  humidity_min: 40  # Минимальная оптимальная влажность (%)
+  humidity_max: 60  # Максимальная оптимальная влажность (%)
+
+# Настройки для конкретных растений (по имени из devices.json)
+plants:
+  Эрика:
+    humidity_min: 45
+    humidity_max: 65
+
+  Варлам:
+    humidity_min: 35
+    humidity_max: 55
+```
+
+### Как это работает
+
+- **Автообновление**: Изменения в `plant_config.yaml` применяются автоматически при следующем цикле экспорта (обычно ~60 секунд). Перезапуск приложения не требуется.
+- **Значения по умолчанию**: Если растение не указано в секции `plants`, используются значения из `defaults`.
+- **Новые растения**: При добавлении новых датчиков через `wizard.py` они автоматически получают значения по умолчанию.
+- **Имена растений**: Используйте точные имена из `devices.json` (поле `name`). Поддерживаются русские имена.
+
+### Использование порогов в Grafana
+
+Пороговые значения экспортируются как отдельные метрики и могут быть использованы для:
+- Визуальных порогов на графиках
+- Создания алертов в Prometheus
+- Автоматических уведомлений о выходе влажности за пределы оптимального диапазона
+
+Пример PromQL запроса для проверки, что влажность в норме:
+
+```promql
+# Проверка, что текущая влажность в пределах нормы
+(tuya_plant_humidity >= tuya_plant_humidity_threshold_min)
+and
+(tuya_plant_humidity <= tuya_plant_humidity_threshold_max)
+```
+
 ## Метрики Prometheus
 
 Экспортер отправляет следующие метрики:
 
+### Метрики данных с датчиков
+
 - `tuya_plant_humidity{device_id="...", device_name="...", instance="home"}` - Влажность почвы (%)
 - `tuya_plant_temperature{device_id="...", device_name="...", instance="home"}` - Температура почвы (°C)
 - `tuya_plant_battery{device_id="...", device_name="...", instance="home"}` - Уровень заряда батареи (%)
+
+### Метрики пороговых значений
+
+- `tuya_plant_humidity_threshold_min{device_id="...", device_name="...", instance="home"}` - Минимальная оптимальная влажность (%)
+- `tuya_plant_humidity_threshold_max{device_id="...", device_name="...", instance="home"}` - Максимальная оптимальная влажность (%)
 
 Каждая метрика помечена labels:
 - `device_id` - ID устройства в Tuya
@@ -246,18 +309,21 @@ tail -f /Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/stderr.log
 
 ```
 tuya-exporter/
-├── tuya_exporter.py        # Основной скрипт экспортера
-├── wizard.py               # Скрипт обнаружения датчиков (TinyTuya)
-├── requirements.txt        # Зависимости Python
-├── .env                    # Конфигурация (не в git)
-├── .env.example            # Пример конфигурации
-├── devices.json.example    # Пример структуры devices.json
-├── .gitignore              # Исключения для git
-├── README.md               # Документация
-└── logs/                   # Директория логов
-    ├── tuya_exporter.log   # Основные логи
-    ├── stdout.log          # stdout LaunchAgent
-    └── stderr.log          # stderr LaunchAgent
+├── tuya_exporter.py           # Основной скрипт экспортера
+├── wizard.py                  # Скрипт обнаружения датчиков (TinyTuya)
+├── requirements.txt           # Зависимости Python
+├── .env                       # Конфигурация (не в git)
+├── .env.example               # Пример конфигурации
+├── devices.json               # Список датчиков (не в git)
+├── devices.json.example       # Пример структуры devices.json
+├── plant_config.yaml          # Пороговые значения растений (не в git)
+├── plant_config.yaml.example  # Пример конфига пороговых значений
+├── .gitignore                 # Исключения для git
+├── README.md                  # Документация
+└── logs/                      # Директория логов
+    ├── tuya_exporter.log      # Основные логи
+    ├── stdout.log             # stdout LaunchAgent
+    └── stderr.log             # stderr LaunchAgent
 ```
 
 ## Troubleshooting

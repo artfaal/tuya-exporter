@@ -15,6 +15,7 @@ import time
 import logging
 import json
 import os
+import yaml
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
 
@@ -102,6 +103,18 @@ battery_gauge = Gauge(
     ['device_id', 'device_name'],
     registry=registry
 )
+humidity_threshold_min_gauge = Gauge(
+    'tuya_plant_humidity_threshold_min',
+    'Minimum optimal soil humidity (%)',
+    ['device_id', 'device_name'],
+    registry=registry
+)
+humidity_threshold_max_gauge = Gauge(
+    'tuya_plant_humidity_threshold_max',
+    'Maximum optimal soil humidity (%)',
+    ['device_id', 'device_name'],
+    registry=registry
+)
 
 def get_all_devices():
     """Загружаем устройства из devices.json (TinyTuya wizard output)"""
@@ -147,6 +160,47 @@ def get_all_devices():
     except Exception as e:
         logger.error(f"Error loading devices.json: {e}", exc_info=True)
         return []
+
+def load_plant_config():
+    """Загружаем конфигурацию пороговых значений для растений из YAML"""
+    config_path = "plant_config.yaml"
+
+    # Дефолтные значения если конфиг не найден
+    default_config = {
+        'defaults': {
+            'humidity_min': 40,
+            'humidity_max': 60
+        },
+        'plants': {}
+    }
+
+    try:
+        if not os.path.exists(config_path):
+            logger.debug(f"📝 {config_path} not found, using defaults")
+            return default_config
+
+        with open(config_path, 'r', encoding='utf-8') as f:
+            config = yaml.safe_load(f)
+
+        if not config:
+            logger.warning(f"⚠️  {config_path} is empty, using defaults")
+            return default_config
+
+        # Проверяем структуру конфига
+        if 'defaults' not in config:
+            config['defaults'] = default_config['defaults']
+        if 'plants' not in config:
+            config['plants'] = {}
+
+        logger.debug(f"✅ Loaded plant config: {len(config['plants'])} custom settings")
+        return config
+
+    except yaml.YAMLError as e:
+        logger.error(f"❌ Error parsing {config_path}: {e}")
+        return default_config
+    except Exception as e:
+        logger.error(f"❌ Error loading {config_path}: {e}")
+        return default_config
 
 def get_device_data(device_id):
     """Получаем данные конкретного устройства"""
@@ -211,6 +265,31 @@ def push_metrics(device_id, device_name, data):
         logger.error(f"Error processing metrics for {device_name}: {e}")
         return False
 
+def push_thresholds(device_id, device_name, plant_config):
+    """Устанавливаем пороговые значения влажности для растения"""
+    try:
+        # Ищем настройки для конкретного растения по имени
+        plant_settings = plant_config['plants'].get(device_name)
+
+        if plant_settings:
+            humidity_min = plant_settings.get('humidity_min', plant_config['defaults']['humidity_min'])
+            humidity_max = plant_settings.get('humidity_max', plant_config['defaults']['humidity_max'])
+        else:
+            # Используем дефолтные значения
+            humidity_min = plant_config['defaults']['humidity_min']
+            humidity_max = plant_config['defaults']['humidity_max']
+
+        # Устанавливаем метрики
+        humidity_threshold_min_gauge.labels(device_id=device_id, device_name=device_name).set(humidity_min)
+        humidity_threshold_max_gauge.labels(device_id=device_id, device_name=device_name).set(humidity_max)
+
+        logger.debug(f"  📊 {device_name}: Thresholds {humidity_min}-{humidity_max}%")
+        return True
+
+    except Exception as e:
+        logger.error(f"Error setting thresholds for {device_name}: {e}")
+        return False
+
 def main():
     logger.info("=" * 60)
     logger.info("🌱 Tuya Multi-Sensor Exporter Started")
@@ -228,6 +307,9 @@ def main():
 
     while True:
         try:
+            # Загружаем конфиг пороговых значений (перечитывается каждый цикл для автообновления)
+            plant_config = load_plant_config()
+
             any_data = False
 
             for device in devices:
@@ -237,6 +319,9 @@ def main():
                 if not device["online"]:
                     logger.warning(f"⚠️  {device_name} is offline, skipping...")
                     continue
+
+                # Устанавливаем пороговые значения для растения
+                push_thresholds(device_id, device_name, plant_config)
 
                 data = get_device_data(device_id)
 
