@@ -115,6 +115,11 @@ humidity_threshold_max_gauge = Gauge(
     ['device_id', 'device_name'],
     registry=registry
 )
+heartbeat_gauge = Gauge(
+    'tuya_exporter_last_success_timestamp',
+    'Unix timestamp of last successful data collection',
+    registry=registry
+)
 
 def get_all_devices():
     """Загружаем устройства из devices.json (TinyTuya wizard output)"""
@@ -330,8 +335,10 @@ def main():
                         any_data = True
 
             if any_data:
+                # Update heartbeat timestamp on successful data collection
+                heartbeat_gauge.set(time.time())
                 push_to_gateway(PUSHGATEWAY, job='tuya_sensors', registry=registry, grouping_key={'instance': 'home'})
-                logger.info(f"✅ All metrics pushed to Pushgateway\n")
+                logger.info(f"✅ All metrics pushed to Pushgateway (heartbeat updated)\n")
             else:
                 logger.warning("⚠️  No data collected in this cycle\n")
 

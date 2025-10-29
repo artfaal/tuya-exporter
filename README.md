@@ -213,6 +213,27 @@ and
 - `tuya_plant_humidity_threshold_min{device_id="...", device_name="...", instance="home"}` - Минимальная оптимальная влажность (%)
 - `tuya_plant_humidity_threshold_max{device_id="...", device_name="...", instance="home"}` - Максимальная оптимальная влажность (%)
 
+### Метрика здоровья (Heartbeat)
+
+- `tuya_exporter_last_success_timestamp{instance="home"}` - Unix timestamp последнего успешного сбора данных
+
+**Использование heartbeat метрики:**
+
+Проверить сколько времени прошло с последнего обновления:
+```promql
+time() - tuya_exporter_last_success_timestamp
+```
+
+Создать алерт если данные не обновлялись больше 5 минут:
+```promql
+(time() - tuya_exporter_last_success_timestamp) > 300
+```
+
+Проверить что экспортер работает (обновлялся за последние 2 минуты):
+```promql
+(time() - tuya_exporter_last_success_timestamp) < 120
+```
+
 Каждая метрика помечена labels:
 - `device_id` - ID устройства в Tuya
 - `device_name` - Имя устройства из `devices.json` (поддерживаются русские имена)
