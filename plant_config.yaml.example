@@ -11,6 +11,7 @@
 defaults:
   humidity_min: 40  # Минимальная оптимальная влажность (%)
   humidity_max: 60  # Максимальная оптимальная влажность (%)
+  group: unknown    # Группа освещения по умолчанию
 
 # Настройки для конкретных растений
 # Ключ - это имя растения из devices.json (поле "name")
@@ -20,24 +21,40 @@ plants:
   Эрика:
     humidity_min: 45
     humidity_max: 65
+    group: alpha  # Группа освещения (alpha, bravo, и т.д.)
 
   Варлам:
     humidity_min: 35
     humidity_max: 55
+    group: alpha
 
   Филипп:
     humidity_min: 40
     humidity_max: 60
+    group: bravo
 
   Алла:
     humidity_min: 50
     humidity_max: 70
+    group: bravo
 
   Гюзель:
     humidity_min: 30
     humidity_max: 50
+    group: bravo
+
+# Настройки для розеток (управление освещением)
+# Ключ - это имя розетки из devices.json (поле "name")
+plugs:
+  Альфа:
+    group: alpha  # Группа освещения (соответствует группе растений)
+
+  Браво:
+    group: bravo  # Вторая группа освещения
 
 # Примечания:
 # - Для новых растений из devices.json автоматически используются defaults
 # - Старые записи в конфиге игнорируются если устройства нет в devices.json
 # - Изменения в этом файле подхватываются при следующем цикле экспорта (~60 сек)
+# - Поле 'group' позволяет группировать растения и розетки по зонам освещения для аналитики в Grafana
+# - Розетки без настроек в секции plugs получат group='unknown'

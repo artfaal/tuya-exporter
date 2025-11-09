@@ -88,33 +88,60 @@ registry = CollectorRegistry()
 humidity_gauge = Gauge(
     'tuya_plant_humidity',
     'Soil humidity (%)',
-    ['device_id', 'device_name'],
+    ['device_id', 'device_name', 'group'],
     registry=registry
 )
 temperature_gauge = Gauge(
     'tuya_plant_temperature',
     'Soil temperature (°C)',
-    ['device_id', 'device_name'],
+    ['device_id', 'device_name', 'group'],
     registry=registry
 )
 battery_gauge = Gauge(
     'tuya_plant_battery',
     'Battery level (%)',
-    ['device_id', 'device_name'],
+    ['device_id', 'device_name', 'group'],
     registry=registry
 )
 humidity_threshold_min_gauge = Gauge(
     'tuya_plant_humidity_threshold_min',
     'Minimum optimal soil humidity (%)',
-    ['device_id', 'device_name'],
+    ['device_id', 'device_name', 'group'],
     registry=registry
 )
 humidity_threshold_max_gauge = Gauge(
     'tuya_plant_humidity_threshold_max',
     'Maximum optimal soil humidity (%)',
-    ['device_id', 'device_name'],
+    ['device_id', 'device_name', 'group'],
     registry=registry
 )
+
+# === SMART PLUG METRICS ===
+plug_switch_gauge = Gauge(
+    'tuya_plug_switch',
+    'Smart plug switch state (0=off, 1=on)',
+    ['device_id', 'device_name', 'group'],
+    registry=registry
+)
+plug_power_gauge = Gauge(
+    'tuya_plug_power',
+    'Current power consumption (W)',
+    ['device_id', 'device_name', 'group'],
+    registry=registry
+)
+plug_current_gauge = Gauge(
+    'tuya_plug_current',
+    'Current draw (mA)',
+    ['device_id', 'device_name', 'group'],
+    registry=registry
+)
+plug_voltage_gauge = Gauge(
+    'tuya_plug_voltage',
+    'Voltage (V)',
+    ['device_id', 'device_name', 'group'],
+    registry=registry
+)
+
 heartbeat_gauge = Gauge(
     'tuya_exporter_last_success_timestamp',
     'Unix timestamp of last successful data collection',
@@ -138,8 +165,8 @@ def get_all_devices():
 
         logger.info(f"📄 Loaded {len(devices)} devices from devices.json")
 
-        # Фильтруем только датчики почвы (категория zwjcy)
-        soil_sensors = []
+        # Фильтруем датчики почвы (zwjcy) и розетки (cz)
+        filtered_devices = []
 
         for dev in devices:
             category = dev.get("category", "")
@@ -147,8 +174,12 @@ def get_all_devices():
             name = dev.get("name", "Unknown")
 
             # Определяем датчики почвы по категории или названию продукта
-            if category == "zwjcy" or "Soil" in product_name or "Plant" in product_name:
-                soil_sensors.append({
+            is_soil_sensor = category == "zwjcy" or "Soil" in product_name or "Plant" in product_name
+            # Определяем розетки по категории
+            is_smart_plug = category == "cz"
+
+            if is_soil_sensor or is_smart_plug:
+                filtered_devices.append({
                     "id": dev["id"],
                     "name": name,
                     "category": category,
@@ -156,11 +187,16 @@ def get_all_devices():
                     "product_name": product_name
                 })
 
-        logger.info(f"Found {len(soil_sensors)} soil sensor(s):")
-        for sensor in soil_sensors:
-            logger.info(f"  - {sensor['name']} ({sensor['id']})")
+        # Подсчитываем устройства по типам
+        soil_count = sum(1 for d in filtered_devices if d['category'] == 'zwjcy')
+        plug_count = sum(1 for d in filtered_devices if d['category'] == 'cz')
 
-        return soil_sensors
+        logger.info(f"Found {soil_count} soil sensor(s) and {plug_count} smart plug(s):")
+        for device in filtered_devices:
+            device_type = "sensor" if device['category'] == 'zwjcy' else "plug"
+            logger.info(f"  - [{device_type}] {device['name']} ({device['id']})")
+
+        return filtered_devices
 
     except Exception as e:
         logger.error(f"Error loading devices.json: {e}", exc_info=True)
@@ -238,7 +274,7 @@ def get_device_data(device_id):
         logger.error(f"Error getting data for {device_id}: {e}")
         return None
 
-def push_metrics(device_id, device_name, data):
+def push_metrics(device_id, device_name, group, data):
     """Отправляем метрики с labels"""
     try:
         metrics_pushed = False
@@ -246,21 +282,21 @@ def push_metrics(device_id, device_name, data):
         # Влажность почвы
         if "humidity" in data:
             humidity = float(data["humidity"])
-            humidity_gauge.labels(device_id=device_id, device_name=device_name).set(humidity)
+            humidity_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(humidity)
             logger.info(f"  💧 {device_name}: Humidity {humidity}%")
             metrics_pushed = True
 
         # Температура
         if "temp_current" in data:
             temp = float(data["temp_current"]) / 10
-            temperature_gauge.labels(device_id=device_id, device_name=device_name).set(temp)
+            temperature_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(temp)
             logger.info(f"  🌡️  {device_name}: Temperature {temp}°C")
             metrics_pushed = True
 
         # Батарея
         if "battery_percentage" in data:
             battery = float(data["battery_percentage"])
-            battery_gauge.labels(device_id=device_id, device_name=device_name).set(battery)
+            battery_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(battery)
             logger.info(f"  🔋 {device_name}: Battery {battery}%")
             metrics_pushed = True
 
@@ -270,7 +306,7 @@ def push_metrics(device_id, device_name, data):
         logger.error(f"Error processing metrics for {device_name}: {e}")
         return False
 
-def push_thresholds(device_id, device_name, plant_config):
+def push_thresholds(device_id, device_name, group, plant_config):
     """Устанавливаем пороговые значения влажности для растения"""
     try:
         # Ищем настройки для конкретного растения по имени
@@ -285,14 +321,54 @@ def push_thresholds(device_id, device_name, plant_config):
             humidity_max = plant_config['defaults']['humidity_max']
 
         # Устанавливаем метрики
-        humidity_threshold_min_gauge.labels(device_id=device_id, device_name=device_name).set(humidity_min)
-        humidity_threshold_max_gauge.labels(device_id=device_id, device_name=device_name).set(humidity_max)
+        humidity_threshold_min_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(humidity_min)
+        humidity_threshold_max_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(humidity_max)
 
         logger.debug(f"  📊 {device_name}: Thresholds {humidity_min}-{humidity_max}%")
         return True
 
     except Exception as e:
         logger.error(f"Error setting thresholds for {device_name}: {e}")
+        return False
+
+def push_plug_metrics(device_id, device_name, group, data):
+    """Отправляем метрики для розетки"""
+    try:
+        metrics_pushed = False
+
+        # Состояние вкл/выкл
+        if "switch_1" in data:
+            switch_state = 1 if data["switch_1"] else 0
+            plug_switch_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(switch_state)
+            state_text = "ON" if switch_state else "OFF"
+            logger.info(f"  🔌 {device_name}: Switch {state_text}")
+            metrics_pushed = True
+
+        # Мощность
+        if "cur_power" in data:
+            power = float(data["cur_power"]) / 10  # Конвертируем в ватты
+            plug_power_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(power)
+            logger.info(f"  ⚡ {device_name}: Power {power}W")
+            metrics_pushed = True
+
+        # Ток
+        if "cur_current" in data:
+            current = float(data["cur_current"])
+            plug_current_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(current)
+            logger.info(f"  🔋 {device_name}: Current {current}mA")
+            metrics_pushed = True
+
+        # Напряжение
+        if "cur_voltage" in data:
+            voltage = float(data["cur_voltage"]) / 10  # Конвертируем в вольты
+            plug_voltage_gauge.labels(device_id=device_id, device_name=device_name, group=group).set(voltage)
+            logger.info(f"  ⚡ {device_name}: Voltage {voltage}V")
+            metrics_pushed = True
+
+        return metrics_pushed
+
+    except Exception as e:
+        logger.error(f"Error processing plug metrics for {device_name}: {e}")
         return False
 
 def main():
@@ -304,7 +380,7 @@ def main():
     devices = get_all_devices()
 
     if not devices:
-        logger.error("❌ No soil sensors found in devices.json!")
+        logger.error("❌ No devices found in devices.json!")
         logger.info("\n💡 Run 'python wizard.py' to discover your devices\n")
         return
 
@@ -320,18 +396,36 @@ def main():
             for device in devices:
                 device_id = device["id"]
                 device_name = device["name"]
+                device_category = device.get("category", "")
 
                 if not device["online"]:
                     logger.warning(f"⚠️  {device_name} is offline, skipping...")
                     continue
 
-                # Устанавливаем пороговые значения для растения
-                push_thresholds(device_id, device_name, plant_config)
-
                 data = get_device_data(device_id)
 
-                if data:
-                    if push_metrics(device_id, device_name, data):
+                if not data:
+                    continue
+
+                # Обрабатываем датчики почвы
+                if device_category == "zwjcy":
+                    # Извлекаем group из конфигурации растения
+                    plant_settings = plant_config['plants'].get(device_name, {})
+                    group = plant_settings.get('group', plant_config['defaults'].get('group', 'unknown'))
+
+                    # Устанавливаем пороговые значения для растения
+                    push_thresholds(device_id, device_name, group, plant_config)
+
+                    if push_metrics(device_id, device_name, group, data):
+                        any_data = True
+
+                # Обрабатываем розетки
+                elif device_category == "cz":
+                    # Извлекаем group из конфигурации розетки
+                    plug_settings = plant_config.get('plugs', {}).get(device_name, {})
+                    group = plug_settings.get('group', 'unknown')
+
+                    if push_plug_metrics(device_id, device_name, group, data):
                         any_data = True
 
             if any_data:
