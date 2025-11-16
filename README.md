@@ -332,6 +332,9 @@ nano ~/Library/LaunchAgents/com.tuya.exporter.plist
     <key>KeepAlive</key>
     <true/>
 
+    <key>ThrottleInterval</key>
+    <integer>60</integer>
+
     <key>StandardOutPath</key>
     <string>/Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/stdout.log</string>
 
@@ -346,6 +349,8 @@ nano ~/Library/LaunchAgents/com.tuya.exporter.plist
 </dict>
 </plist>
 ```
+
+**Примечание:** `ThrottleInterval` задает минимальное время (в секундах) между перезапусками сервиса при падении, что предотвращает бесконечные попытки перезапуска.
 
 Загрузка и запуск сервиса:
 

@@ -16,8 +16,12 @@ import logging
 import json
 import os
 import yaml
+import socket
 from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
+
+# Устанавливаем глобальный таймаут для всех socket операций (30 секунд)
+socket.setdefaulttimeout(30.0)
 
 # Load environment variables
 load_dotenv()
@@ -270,8 +274,14 @@ def get_device_data(device_id):
         data_dict = {item["code"]: item["value"] for item in status}
         return data_dict
 
+    except socket.timeout:
+        logger.error(f"Timeout при получении данных для {device_id}")
+        return None
+    except ConnectionError as e:
+        logger.error(f"Ошибка соединения при получении данных для {device_id}: {e}")
+        return None
     except Exception as e:
-        logger.error(f"Error getting data for {device_id}: {e}")
+        logger.error(f"Ошибка при получении данных для {device_id}: {e}")
         return None
 
 def push_metrics(device_id, device_name, group, data):
@@ -430,9 +440,16 @@ def main():
 
             if any_data:
                 # Update heartbeat timestamp on successful data collection
-                heartbeat_gauge.set(time.time())
-                push_to_gateway(PUSHGATEWAY, job='tuya_sensors', registry=registry, grouping_key={'instance': 'home'})
-                logger.info(f"✅ All metrics pushed to Pushgateway (heartbeat updated)\n")
+                try:
+                    heartbeat_gauge.set(time.time())
+                    push_to_gateway(PUSHGATEWAY, job='tuya_sensors', registry=registry, grouping_key={'instance': 'home'}, timeout=10)
+                    logger.info(f"✅ All metrics pushed to Pushgateway (heartbeat updated)\n")
+                except socket.timeout:
+                    logger.error("❌ Timeout при отправке метрик в Pushgateway\n")
+                except ConnectionError as e:
+                    logger.error(f"❌ Ошибка соединения с Pushgateway: {e}\n")
+                except Exception as e:
+                    logger.error(f"❌ Ошибка при отправке метрик в Pushgateway: {e}\n")
             else:
                 logger.warning("⚠️  No data collected in this cycle\n")
 
@@ -440,7 +457,9 @@ def main():
             logger.info("\n👋 Stopped by user")
             break
         except Exception as e:
-            logger.error(f"❌ Unexpected error: {e}\n", exc_info=True)
+            logger.error(f"❌ Unexpected error in main loop: {e}\n", exc_info=True)
+            logger.info("Продолжаем работу через 60 секунд...\n")
+            time.sleep(60)
 
         time.sleep(INTERVAL)
 
