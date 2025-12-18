@@ -75,11 +75,12 @@ if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
         socks.SOCKS5,
         PROXY_HOST,
         PROXY_PORT,
+        rdns=True,  # Enable remote DNS resolution through SOCKS5
         username=PROXY_USER,
         password=PROXY_PASSWORD
     )
     socket.socket = socks.socksocket
-    logger.info(f"🔒 SOCKS5 proxy enabled: {PROXY_HOST}:{PROXY_PORT}")
+    logger.info(f"🔒 SOCKS5 proxy enabled: {PROXY_HOST}:{PROXY_PORT} (remote DNS)")
 else:
     logger.info("📡 Using direct connection (no proxy)")
 
