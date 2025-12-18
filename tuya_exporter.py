@@ -23,19 +23,25 @@ PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
 
 # === SETUP SOCKS5 PROXY BEFORE ANY NETWORK IMPORTS ===
 if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
+    # Setup for requests library (Tuya API)
+    proxy_url = f"socks5h://{PROXY_USER}:{PROXY_PASSWORD}@{PROXY_HOST}:{PROXY_PORT}"
+    os.environ['HTTP_PROXY'] = proxy_url
+    os.environ['HTTPS_PROXY'] = proxy_url
+    os.environ['ALL_PROXY'] = proxy_url
+
+    # Setup for urllib (prometheus_client)
     import socks
     import socket
-
     socks.set_default_proxy(
         socks.SOCKS5,
         PROXY_HOST,
         PROXY_PORT,
-        rdns=True,  # Enable remote DNS resolution through SOCKS5
+        rdns=True,
         username=PROXY_USER,
         password=PROXY_PASSWORD
     )
     socket.socket = socks.socksocket
-    print(f"SOCKS5 proxy configured: {PROXY_HOST}:{PROXY_PORT} (remote DNS)")
+    print(f"SOCKS5 proxy configured: {PROXY_HOST}:{PROXY_PORT} (remote DNS for both requests and urllib)")
 
 # NOW import network libraries
 from tuya_connector import TuyaOpenAPI
@@ -86,7 +92,7 @@ logger.addHandler(file_handler)
 
 # Log proxy status
 if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
-    logger.info(f"🔒 SOCKS5 proxy enabled: {PROXY_HOST}:{PROXY_PORT} (remote DNS)")
+    logger.info(f"🔒 SOCKS5 proxy enabled: {PROXY_HOST}:{PROXY_PORT} (remote DNS for all connections)")
 else:
     logger.info("📡 Using direct connection (no proxy)")
 
@@ -448,8 +454,19 @@ def main():
             if any_data:
                 # Update heartbeat timestamp on successful data collection
                 try:
+                    import requests
+                    from prometheus_client import exposition
+
                     heartbeat_gauge.set(time.time())
-                    push_to_gateway(PUSHGATEWAY, job='tuya_sensors', registry=registry, grouping_key={'instance': 'home'}, timeout=10)
+
+                    # Generate metrics in Prometheus format
+                    metrics_data = exposition.generate_latest(registry)
+
+                    # Push to gateway using requests (which uses env proxy)
+                    url = f"{PUSHGATEWAY}/metrics/job/tuya_sensors/instance/home"
+                    response = requests.post(url, data=metrics_data, timeout=30)
+                    response.raise_for_status()
+
                     logger.info(f"✅ All metrics pushed to Pushgateway (heartbeat updated)\n")
                 except socket.timeout:
                     logger.error("❌ Timeout при отправке метрик в Pushgateway\n")
