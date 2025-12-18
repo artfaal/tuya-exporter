@@ -9,22 +9,46 @@ Tuya Multi-Sensor → Prometheus Pushgateway Exporter
 - Отправляет метрики в Pushgateway с поддержкой русских имён
 - Опциональная работа через SOCKS5 прокси
 """
+import os
+from dotenv import load_dotenv
+
+# Load environment variables FIRST
+load_dotenv()
+
+# SOCKS5 Proxy configuration (optional)
+PROXY_HOST = os.getenv("PROXY_HOST")
+PROXY_PORT = int(os.getenv("PROXY_PORT", "1080"))
+PROXY_USER = os.getenv("PROXY_USER")
+PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
+
+# === SETUP SOCKS5 PROXY BEFORE ANY NETWORK IMPORTS ===
+if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
+    import socks
+    import socket
+
+    socks.set_default_proxy(
+        socks.SOCKS5,
+        PROXY_HOST,
+        PROXY_PORT,
+        rdns=True,  # Enable remote DNS resolution through SOCKS5
+        username=PROXY_USER,
+        password=PROXY_PASSWORD
+    )
+    socket.socket = socks.socksocket
+    print(f"SOCKS5 proxy configured: {PROXY_HOST}:{PROXY_PORT} (remote DNS)")
+
+# NOW import network libraries
 from tuya_connector import TuyaOpenAPI
 from prometheus_client import CollectorRegistry, Gauge, push_to_gateway
 import time
 import logging
 import json
-import os
 import yaml
 import socket
-from dotenv import load_dotenv
 from logging.handlers import RotatingFileHandler
 
 # Устанавливаем глобальный таймаут для всех socket операций (30 секунд)
 socket.setdefaulttimeout(30.0)
-
-# Load environment variables
-load_dotenv()
 
 # === CONFIGURATION ===
 ACCESS_ID = os.getenv("TUYA_ACCESS_ID")
@@ -32,12 +56,6 @@ ACCESS_KEY = os.getenv("TUYA_ACCESS_KEY")
 API_ENDPOINT = os.getenv("TUYA_API_ENDPOINT", "https://openapi.tuyaeu.com")
 PUSHGATEWAY = os.getenv("PUSHGATEWAY_URL")
 INTERVAL = int(os.getenv("INTERVAL", "60"))
-
-# SOCKS5 Proxy configuration (optional)
-PROXY_HOST = os.getenv("PROXY_HOST")
-PROXY_PORT = int(os.getenv("PROXY_PORT", "1080"))
-PROXY_USER = os.getenv("PROXY_USER")
-PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
 
 # === LOGGING ===
 os.makedirs("logs", exist_ok=True)
@@ -66,20 +84,8 @@ file_handler.setFormatter(file_formatter)
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
-# === SETUP SOCKS5 PROXY ===
+# Log proxy status
 if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
-    import socks
-    import socket
-
-    socks.set_default_proxy(
-        socks.SOCKS5,
-        PROXY_HOST,
-        PROXY_PORT,
-        rdns=True,  # Enable remote DNS resolution through SOCKS5
-        username=PROXY_USER,
-        password=PROXY_PASSWORD
-    )
-    socket.socket = socks.socksocket
     logger.info(f"🔒 SOCKS5 proxy enabled: {PROXY_HOST}:{PROXY_PORT} (remote DNS)")
 else:
     logger.info("📡 Using direct connection (no proxy)")
