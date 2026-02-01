@@ -355,18 +355,21 @@ nano ~/Library/LaunchAgents/com.tuya.exporter.plist
 Загрузка и запуск сервиса:
 
 ```bash
-# Загрузить и запустить
-launchctl load ~/Library/LaunchAgents/com.tuya.exporter.plist
+# Запустить
+./service.sh start
 
 # Проверить статус
-launchctl list | grep tuya
+./service.sh status
 
 # Остановить
-launchctl unload ~/Library/LaunchAgents/com.tuya.exporter.plist
+./service.sh stop
+
+# Перезапустить
+./service.sh restart
 
 # Просмотр логов
-tail -f /Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/tuya_exporter.log
-tail -f /Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/stderr.log
+tail -f logs/tuya_exporter.log
+tail -f logs/stderr.log
 ```
 
 ## Обновление имен датчиков
@@ -375,19 +378,18 @@ tail -f /Users/southnet-mac-server/PROJECTS/tuya-exporter/logs/stderr.log
 
 1. Остановите экспортер:
    ```bash
-   launchctl unload ~/Library/LaunchAgents/com.tuya.exporter.plist
+   ./service.sh stop
    ```
 
 2. Запустите wizard для обновления `devices.json`:
    ```bash
-   cd /Users/southnet-mac-server/PROJECTS/tuya-exporter
    source venv/bin/activate
    python wizard.py
    ```
 
 3. Перезапустите экспортер:
    ```bash
-   launchctl load ~/Library/LaunchAgents/com.tuya.exporter.plist
+   ./service.sh start
    ```
 
 ## Структура проекта
