@@ -50,5 +50,3 @@ tinytuya.json
 tuya-raw.json
 snapshot.json
 
-# Plant configuration (user-specific)
-plant_config.yaml
