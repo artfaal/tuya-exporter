@@ -187,9 +187,10 @@ tuya-exporter/
 ├── .env.example
 ├── devices.json               # Список устройств, генерируется wizard (не в git)
 ├── devices.json.example
+├── tinytuya.json              # Сохранённые настройки wizard (не в git)
 ├── plant_config.yaml          # Пороговые значения растений (не в git)
 ├── plant_config.yaml.example
-└── logs/                      # Логи (volume)
+└── logs/                      # Логи (volume, docker json-file 5m×3)
     └── tuya_exporter.log
 ```
 
