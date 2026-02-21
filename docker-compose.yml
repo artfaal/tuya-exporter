@@ -28,6 +28,7 @@ services:
     volumes:
       - ./.env:/app/.env:ro
       - ./devices.json:/app/devices.json
+      - ./tinytuya.json:/app/tinytuya.json
     stdin_open: true
     tty: true
     command: ["python", "wizard.py"]
