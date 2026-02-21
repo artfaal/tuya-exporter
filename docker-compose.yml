@@ -1,0 +1,30 @@
+services:
+  tuya-exporter:
+    build: .
+    image: tuya-exporter:latest
+    container_name: tuya-exporter
+    restart: unless-stopped
+    environment:
+      - TZ=Europe/Moscow
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./devices.json:/app/devices.json:ro
+      - ./plant_config.yaml:/app/plant_config.yaml:ro
+      - ./logs:/app/logs
+
+  # Запуск wizard для обнаружения/обновления устройств:
+  #   docker compose --profile wizard run --rm tuya-wizard
+  tuya-wizard:
+    build: .
+    image: tuya-exporter:latest
+    container_name: tuya-wizard
+    profiles: ["wizard"]
+    network_mode: host
+    environment:
+      - TZ=Europe/Moscow
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./devices.json:/app/devices.json
+    stdin_open: true
+    tty: true
+    command: ["python", "wizard.py"]
