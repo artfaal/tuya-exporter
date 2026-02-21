@@ -9,8 +9,9 @@ services:
     environment:
       - TZ=Europe/Moscow
       - PYTHONUNBUFFERED=1
+    env_file:
+      - .env
     volumes:
-      - ./.env:/app/.env:ro
       - ./devices.json:/app/devices.json:ro
       - ./plant_config.yaml:/app/plant_config.yaml:ro
       - ./logs:/app/logs
@@ -25,8 +26,9 @@ services:
     network_mode: host
     environment:
       - TZ=Europe/Moscow
+    env_file:
+      - .env
     volumes:
-      - ./.env:/app/.env:ro
       - ./devices.json:/app/devices.json
       - ./tinytuya.json:/app/tinytuya.json
     stdin_open: true
