@@ -15,6 +15,11 @@ services:
       - ./devices.json:/app/devices.json:ro
       - ./plant_config.yaml:/app/plant_config.yaml:ro
       - ./logs:/app/logs
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
 
   # Запуск wizard для обнаружения/обновления устройств:
   #   docker compose --profile wizard run --rm tuya-wizard
