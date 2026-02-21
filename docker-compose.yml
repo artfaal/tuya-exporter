@@ -1,3 +1,5 @@
+name: tuya-exporter
+
 services:
   tuya-exporter:
     build: .
@@ -6,6 +8,7 @@ services:
     restart: unless-stopped
     environment:
       - TZ=Europe/Moscow
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./.env:/app/.env:ro
       - ./devices.json:/app/devices.json:ro
