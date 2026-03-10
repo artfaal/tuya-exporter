@@ -7,41 +7,12 @@ Tuya Multi-Sensor → Prometheus Pushgateway Exporter
 - Загружает список датчиков из devices.json (TinyTuya wizard)
 - Получает данные через Tuya Cloud API
 - Отправляет метрики в Pushgateway с поддержкой русских имён
-- Опциональная работа через SOCKS5 прокси
 """
 import os
 from dotenv import load_dotenv
 
 # Load environment variables FIRST
 load_dotenv()
-
-# SOCKS5 Proxy configuration (optional)
-PROXY_HOST = os.getenv("PROXY_HOST")
-PROXY_PORT = int(os.getenv("PROXY_PORT", "1080"))
-PROXY_USER = os.getenv("PROXY_USER")
-PROXY_PASSWORD = os.getenv("PROXY_PASSWORD")
-
-# === SETUP SOCKS5 PROXY BEFORE ANY NETWORK IMPORTS ===
-if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
-    # Setup for requests library (Tuya API)
-    proxy_url = f"socks5h://{PROXY_USER}:{PROXY_PASSWORD}@{PROXY_HOST}:{PROXY_PORT}"
-    os.environ['HTTP_PROXY'] = proxy_url
-    os.environ['HTTPS_PROXY'] = proxy_url
-    os.environ['ALL_PROXY'] = proxy_url
-
-    # Setup for urllib (prometheus_client)
-    import socks
-    import socket
-    socks.set_default_proxy(
-        socks.SOCKS5,
-        PROXY_HOST,
-        PROXY_PORT,
-        rdns=True,
-        username=PROXY_USER,
-        password=PROXY_PASSWORD
-    )
-    socket.socket = socks.socksocket
-    print(f"SOCKS5 proxy configured: {PROXY_HOST}:{PROXY_PORT} (remote DNS for both requests and urllib)")
 
 # NOW import network libraries
 from tuya_connector import TuyaOpenAPI
@@ -90,11 +61,7 @@ file_handler.setFormatter(file_formatter)
 logger.addHandler(console_handler)
 logger.addHandler(file_handler)
 
-# Log proxy status
-if PROXY_HOST and PROXY_USER and PROXY_PASSWORD:
-    logger.info(f"🔒 SOCKS5 proxy enabled: {PROXY_HOST}:{PROXY_PORT} (remote DNS for all connections)")
-else:
-    logger.info("📡 Using direct connection (no proxy)")
+logger.info("📡 Direct connection")
 
 # === INIT TUYA API ===
 openapi = TuyaOpenAPI(API_ENDPOINT, ACCESS_ID, ACCESS_KEY)
@@ -462,7 +429,6 @@ def main():
                     # Generate metrics in Prometheus format
                     metrics_data = exposition.generate_latest(registry)
 
-                    # Push to gateway using requests (which uses env proxy)
                     url = f"{PUSHGATEWAY}/metrics/job/tuya_sensors/instance/home"
                     response = requests.post(url, data=metrics_data, timeout=30)
                     response.raise_for_status()
