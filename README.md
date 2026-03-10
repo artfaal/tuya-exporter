@@ -14,7 +14,6 @@
 - Группировка растений и розеток по зонам освещения
 - Настраиваемые пороговые значения влажности для каждого растения
 - Автообновление конфига без перезапуска приложения
-- Поддержка SOCKS5 прокси (опционально)
 - Логирование в файл с ротацией
 
 ## Требования
@@ -46,12 +45,6 @@ TUYA_ACCESS_KEY=your_access_key_here
 TUYA_API_ENDPOINT=https://openapi.tuyaeu.com
 PUSHGATEWAY_URL=https://pushgateway.example.com
 INTERVAL=60
-
-# SOCKS5 прокси (опционально)
-PROXY_HOST=
-PROXY_PORT=1080
-PROXY_USER=
-PROXY_PASSWORD=
 ```
 
 > Получить `Access ID` и `Access Key` можно на [iot.tuya.com](https://iot.tuya.com/) в настройках вашего Cloud Project.
