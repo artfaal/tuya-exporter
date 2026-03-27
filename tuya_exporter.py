@@ -22,6 +22,7 @@ import logging
 import json
 import yaml
 import socket
+import requests
 from logging.handlers import RotatingFileHandler
 
 # Устанавливаем глобальный таймаут для всех socket операций (30 секунд)
@@ -33,6 +34,8 @@ ACCESS_KEY = os.getenv("TUYA_ACCESS_KEY")
 API_ENDPOINT = os.getenv("TUYA_API_ENDPOINT", "https://openapi.tuyaeu.com")
 PUSHGATEWAY = os.getenv("PUSHGATEWAY_URL")
 INTERVAL = int(os.getenv("INTERVAL", "60"))
+TUYA_REQUEST_TIMEOUT = float(os.getenv("TUYA_REQUEST_TIMEOUT", "15"))
+PUSHGATEWAY_TIMEOUT = float(os.getenv("PUSHGATEWAY_TIMEOUT", "30"))
 
 # === LOGGING ===
 os.makedirs("logs", exist_ok=True)
@@ -64,8 +67,31 @@ logger.addHandler(file_handler)
 logger.info("📡 Direct connection")
 
 # === INIT TUYA API ===
+def configure_openapi_session(api):
+    """Enforce timeout and disable HTTP keep-alive for Tuya Cloud requests."""
+    api.session.close()
+    api.session = requests.Session()
+    api.session.headers.update({"Connection": "close"})
+
+    original_request = api.session.request
+
+    def request_with_timeout(method, url, **kwargs):
+        kwargs.setdefault("timeout", TUYA_REQUEST_TIMEOUT)
+        return original_request(method, url, **kwargs)
+
+    api.session.request = request_with_timeout
+
+
+def reconnect_openapi(api):
+    """Recreate requests session and re-auth against Tuya Cloud."""
+    configure_openapi_session(api)
+    response = api.connect()
+    if not response or not response.get("success"):
+        raise RuntimeError(f"Tuya connect failed: {response}")
+
+
 openapi = TuyaOpenAPI(API_ENDPOINT, ACCESS_ID, ACCESS_KEY)
-openapi.connect()
+reconnect_openapi(openapi)
 
 # === METRICS (with labels) ===
 registry = CollectorRegistry()
@@ -254,11 +280,19 @@ def get_device_data(device_id):
         data_dict = {item["code"]: item["value"] for item in status}
         return data_dict
 
-    except socket.timeout:
-        logger.error(f"Timeout при получении данных для {device_id}")
+    except (requests.Timeout, socket.timeout):
+        logger.error(f"Timeout при получении данных для {device_id}; reconnecting Tuya session")
+        try:
+            reconnect_openapi(openapi)
+        except Exception as reconnect_error:
+            logger.error(f"Не удалось переподключиться к Tuya Cloud: {reconnect_error}")
         return None
-    except ConnectionError as e:
-        logger.error(f"Ошибка соединения при получении данных для {device_id}: {e}")
+    except (requests.ConnectionError, ConnectionError) as e:
+        logger.error(f"Ошибка соединения при получении данных для {device_id}: {e}; reconnecting Tuya session")
+        try:
+            reconnect_openapi(openapi)
+        except Exception as reconnect_error:
+            logger.error(f"Не удалось переподключиться к Tuya Cloud: {reconnect_error}")
         return None
     except Exception as e:
         logger.error(f"Ошибка при получении данных для {device_id}: {e}")
@@ -430,7 +464,7 @@ def main():
                     metrics_data = exposition.generate_latest(registry)
 
                     url = f"{PUSHGATEWAY}/metrics/job/tuya_sensors/instance/home"
-                    response = requests.post(url, data=metrics_data, timeout=30)
+                    response = requests.post(url, data=metrics_data, timeout=PUSHGATEWAY_TIMEOUT)
                     response.raise_for_status()
 
                     logger.info(f"✅ All metrics pushed to Pushgateway (heartbeat updated)\n")
