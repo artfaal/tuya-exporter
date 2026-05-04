@@ -87,6 +87,11 @@ plants:
     humidity_min: 35
     humidity_max: 50
 
+  Геральд:
+    humidity_min: 40
+    humidity_max: 55
+    group: alpha
+
 # Настройки для розеток (управление освещением)
 # Ключ - это имя розетки из devices.json (поле "name")
 plugs:
