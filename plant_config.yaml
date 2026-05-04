@@ -83,9 +83,9 @@ plants:
     humidity_max: 45
     group: alpha
 
-  Терентий:
+  Терентий II:
     humidity_min: 35
-    humidity_max: 55
+    humidity_max: 50
 
 # Настройки для розеток (управление освещением)
 # Ключ - это имя розетки из devices.json (поле "name")
