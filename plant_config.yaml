@@ -78,11 +78,6 @@ plants:
     humidity_max: 50
     group: bravo
 
-  Кратос:
-    humidity_min: 30
-    humidity_max: 45
-    group: alpha
-
   Терентий II:
     humidity_min: 35
     humidity_max: 50
