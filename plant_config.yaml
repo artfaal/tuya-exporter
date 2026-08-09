@@ -81,6 +81,7 @@ plants:
   Терентий II:
     humidity_min: 35
     humidity_max: 50
+    group: alpha
 
   Геральт:
     humidity_min: 40
